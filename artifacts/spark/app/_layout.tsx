@@ -17,8 +17,8 @@ import { setBaseUrl } from "@workspace/api-client-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const apiBase = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`
-  : "/api";
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+  : "";
 setBaseUrl(apiBase);
 
 SplashScreen.preventAutoHideAsync();
