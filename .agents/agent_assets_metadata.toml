@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "Er5lRsGttgWus9WTtrv3C"
+uri = "file://artifacts/spark/assets/images/icon.png"
+type = "image"
+title = "spark adhd icon"

@@ -1,0 +1,498 @@
+You are a senior full-stack engineer building a complete MVP of a mobile-first ADHD productivity app called [APP NAME]. This is a conversational, personality-driven productivity system — NOT a traditional to-do app.
+
+Build the full project as a monorepo with two apps: a React Native (Expo) mobile frontend and a Node.js (Fastify) backend API.
+
+---
+
+# TECH STACK
+
+## Frontend
+- React Native + Expo (SDK 51+)
+- Expo Router (file-based navigation)
+- Zustand (global state)
+- React Query / TanStack Query (server sync)
+- Expo SecureStore (JWT storage)
+- Expo Notifications (push)
+- TypeScript throughout
+
+## Backend
+- Node.js + Fastify
+- Drizzle ORM + Zod validation
+- Postgres (via Neon serverless)
+- Redis (via Upstash — sessions, queues, rate limits)
+- Bull (job queues for scheduling + inactivity)
+- Firebase Admin SDK (push notifications)
+- Google OAuth 2.0
+- JWT authentication middleware
+- TypeScript throughout
+
+## AI
+- Anthropic API (claude-sonnet-4-20250514)
+- Called ONLY from backend, never from client
+- SSE (Server-Sent Events) for streaming responses to client
+
+## Infrastructure
+- Monorepo: /apps/mobile + /apps/api + /packages/types
+- Railway (backend deploy)
+- Expo EAS (mobile build + OTA updates)
+
+---
+
+# DATABASE SCHEMA
+
+Create the following Postgres tables using Drizzle ORM:
+
+## users
+- id (uuid, PK)
+- email (text, unique)
+- name (text)
+- google_id (text, unique)
+- selected_character_id (text)
+- difficulty_tags (text[]) — e.g. ["starting tasks", "staying focused"]
+- xp (integer, default 0)
+- created_at (timestamp)
+- updated_at (timestamp)
+
+## tasks
+- id (uuid, PK)
+- user_id (uuid, FK → users)
+- title (text)
+- status (enum: open | scheduled | in_progress | paused | completed)
+- start_time (timestamp, nullable)
+- end_time (timestamp, nullable)
+- scheduled_for (timestamp, nullable)
+- duration_minutes (integer, nullable)
+- resistance_level (enum: low | medium | high)
+- task_type (text, nullable)
+- created_at (timestamp)
+- updated_at (timestamp)
+
+## sessions
+- id (uuid, PK)
+- user_id (uuid, FK → users)
+- character_id (text)
+- active_task_id (uuid, FK → tasks, nullable)
+- start_time (timestamp)
+- end_time (timestamp, nullable)
+- summary (text, nullable)
+- created_at (timestamp)
+
+## xp_events
+- id (uuid, PK)
+- user_id (uuid, FK → users)
+- event_type (text) — e.g. "task_completed", "focus_session", "streak"
+- xp_awarded (integer)
+- created_at (timestamp)
+
+## behavior_log
+- id (uuid, PK)
+- user_id (uuid, FK → users)
+- event_type (text) — e.g. "idle", "resistance", "distraction", "return", "completion"
+- task_id (uuid, nullable)
+- metadata (jsonb)
+- created_at (timestamp)
+
+---
+
+# CHARACTER SYSTEM
+
+Seed the database with these 20 characters. The first 5 are UNLOCKED by default. The rest unlock at XP thresholds.
+
+## Default (unlocked, 0 XP):
+1. Entropy Fox — chaos mode. Thrives in mess, helps start by making chaos feel intentional.
+2. Signal Ghost — focus mode. Cuts through distraction, shows the one thing that matters.
+3. Void Otter — calm mode. Anti-anxiety, sits with you until something feels safe to start.
+4. Friction Goblin — sarcasm mode. Calls out avoidance tactics, uncomfortably accurate.
+5. Threshold Hare — paradox mode. Specializes in the first 90 seconds, task-initiation expert.
+
+## Locked (unlock at XP thresholds):
+6. Gravity Snail — 100 XP — calm. Slow is fine, steady pull toward completion.
+7. Paradox Moth — 150 XP — paradox. Speaks in counterintuitive truths.
+8. Momentum Crow — 200 XP — focus. Gets you moving, celebrates streaks.
+9. Surge Beetle — 250 XP — urgent. Activates under pressure, deadline sprints.
+10. Drift Whale — 300 XP — calm. Reframes hyperfocus as superpower.
+11. Cascade Lynx — 350 XP — chaos. Turns one small action into a chain reaction.
+12. Static Rook — 400 XP — focus. Identifies one blocker, names it, removes it.
+13. Flicker Imp — 450 XP — chaos. Short sessions, playful, 5-minute sprints.
+14. Latent Bear — 500 XP — calm. Speaks to dormant potential without pressure.
+15. Resonance Hound — 550 XP — focus. Finds intrinsic motivation, amplifies it.
+16. Inertia Slug — 600 XP — sarcasm. Affectionately calls out procrastination with data.
+17. Pressure Kite — 650 XP — urgent. Reframes deadline panic as useful lift.
+18. Decoy Cloud — 700 XP — paradox. Uses mental tricks to fool brain into starting.
+19. Null Fox — 750 XP — sarcasm. Deadpan data-driven callouts on inaction.
+20. Echo Mole — 800 XP — paradox. Surfaces buried resistance without judgment.
+
+Each character has:
+- id (slug, e.g. "entropy-fox")
+- name
+- mode (chaos | focus | calm | sarcasm | paradox | urgent)
+- xp_required (integer)
+- personality_prompt (2-3 sentences used in AI system prompt)
+- color (hex — assign each a unique distinct color for UI theming)
+
+---
+
+# BACKEND API ROUTES
+
+## Auth
+POST /auth/google — receive Google OAuth token, verify, create/find user, return JWT
+POST /auth/refresh — refresh JWT
+GET  /auth/me — return current user profile
+
+## Users
+PATCH /users/me — update name, selected_character_id, difficulty_tags
+GET   /users/me/xp — return xp total + unlocked characters
+
+## Tasks
+GET    /tasks — list all tasks for user (filter by status)
+POST   /tasks — create task
+PATCH  /tasks/:id — update task (status, scheduled_for, etc.)
+DELETE /tasks/:id — delete task
+POST   /tasks/extract — given raw user text, use AI to extract structured tasks, return preview (do NOT save yet)
+POST   /tasks/confirm-extract — save extracted tasks after user confirms
+
+## Chat
+POST /chat/stream — stream AI response (SSE)
+  Body: { character_id, message, session_id, recent_messages[] }
+  Server builds context: character definition + user profile + session summary + last 6 messages
+  Returns SSE stream with text chunks + optional UI_BLOCK metadata
+
+## Sessions
+POST  /sessions — start new session
+PATCH /sessions/:id — update (end session, attach summary)
+GET   /sessions/:id — get session
+POST  /sessions/:id/summarize — trigger AI summary of session
+
+## XP
+POST /xp/award — award XP for an event (task_completed, focus_session, streak, return_after_distraction)
+  Automatically checks unlock thresholds and unlocks characters
+
+## Scheduling
+POST /schedule/delay — schedule a task for later (10min | 30min | later_today | tomorrow)
+  Creates a Bull job that fires a push notification at the scheduled time
+
+## Notifications
+POST /notifications/register — register device push token
+
+---
+
+# AI SERVICE
+
+Build an `ai-service.ts` module with:
+
+## buildContext(userId, characterId, sessionId, recentMessages)
+Fetches:
+- Character personality_prompt from seed data
+- User name + difficulty_tags + selected_character
+- Session summary (if exists)
+- Last 6 messages only
+
+Returns a messages array for the Anthropic API:
+- system: "[character personality] + [user context] + [session summary] + [behavioral instructions]"
+- messages: last 6 from recentMessages
+
+## streamChatResponse(context, onChunk, onUIBlock)
+Calls Anthropic API with streaming enabled.
+Parses response for optional UI_BLOCK markers in this format:
+[UI_BLOCK:{"type":"task_card","data":{...}}]
+[UI_BLOCK:{"type":"quick_actions","options":["Start now","In 10 min","Tomorrow"]}]
+[UI_BLOCK:{"type":"checklist","items":["item1","item2"]}]
+[UI_BLOCK:{"type":"schedule_selector"}]
+[UI_BLOCK:{"type":"resistance_options","options":["It feels too big","I don't know where to start","I just don't want to"]}]
+[UI_BLOCK:{"type":"focus_controls"}]
+[UI_BLOCK:{"type":"session_summary","tasks_completed":[],"tasks_partial":[],"xp_earned":0}]
+
+Strips UI_BLOCK markers from visible text, calls onUIBlock callback with parsed block data.
+
+## extractTasks(rawText)
+Sends raw user brain-dump text to Anthropic API.
+System prompt instructs extraction of tasks in this JSON format:
+{
+  "tasks": [
+    {
+      "title": string,
+      "duration_minutes": number | null,
+      "resistance_level": "low" | "medium" | "high",
+      "task_type": string | null
+    }
+  ]
+}
+Returns parsed task array.
+
+## generateSessionSummary(sessionId, completedTasks, partialTasks, durationMinutes)
+Returns a short 2-3 sentence session summary in the character's voice.
+
+---
+
+# CHARACTER BEHAVIORAL INSTRUCTIONS
+
+Each character must have a personality_prompt. Include these in seed data and use them in the AI system prompt.
+
+Also include these global behavioral rules in every system prompt:
+
+- You are an AI companion inside an ADHD productivity app. Your job is to help the user identify tasks, start tasks, overcome procrastination, stay focused, and complete tasks.
+- Keep ALL messages short: 1-3 sentences max. ADHD users do not read long messages.
+- Always include at least one UI_BLOCK per response. Never send a text-only response.
+- Minimize typing. Offer buttons and options wherever possible.
+- One action at a time. Never overwhelm.
+- Detect the user's behavioral state: idle | resistance | active | distraction | return | completion | overwhelm. Respond to their state, not just their words.
+- When user seems stuck, offer resistance_options UI block.
+- When user completes something, celebrate briefly then move forward. Do not over-praise.
+- Never moralize. Never lecture. Never say "you should".
+- Always speak in character voice and personality.
+
+---
+
+# FRONTEND SCREENS
+
+## Screen structure (Expo Router file-based):
+/app
+  /(auth)
+    /login.tsx — Google Sign In button
+  /(onboarding)
+    /name.tsx — text input for name
+    /difficulty.tsx — multi-select difficulty tags
+    /character.tsx — character selection (unlocked only)
+    /brain-dump.tsx — free text area + submit
+    /task-preview.tsx — show extracted tasks, confirm or edit
+  /(main)
+    /(tabs)
+      /today.tsx — Today screen
+      /chat.tsx — Chat screen
+      /characters.tsx — Character roster
+    /focus/[taskId].tsx — Focus mode (full screen)
+
+## Components to build:
+
+### ChatMessage.tsx
+Props: { role, content, uiBlocks[] }
+Renders text + any attached UI blocks below it
+
+### QuickActionButtons.tsx
+Props: { options: string[], onSelect }
+Renders a row of pill buttons
+
+### TaskCard.tsx
+Props: { task, onStart, onSchedule, onComplete }
+Renders task title, resistance level badge, action buttons
+
+### ScheduleSelector.tsx
+Props: { onSelect }
+Options: "In 10 min" | "In 30 min" | "Later today" | "Tomorrow"
+
+### ChecklistBlock.tsx
+Props: { items: string[], onToggle }
+Renders interactive checklist
+
+### ResistanceOptions.tsx
+Props: { options: string[], onSelect }
+Similar to QuickActionButtons but styled differently (softer, more empathetic)
+
+### FocusControls.tsx
+Props: { task, onDoneStep, onStuck, onMakeSmaller, onPause, onFinish }
+Renders focus mode control buttons
+
+### SessionSummaryCard.tsx
+Props: { tasksCompleted, tasksPartial, xpEarned, duration }
+End-of-session summary card
+
+### CharacterCard.tsx
+Props: { character, isLocked, xpRequired, isSelected, onSelect }
+Shows character name, mode badge, color accent
+If locked: blurred/dimmed with "Unlock at X XP" overlay
+
+### XPBar.tsx
+Props: { currentXP, nextThreshold, characterName }
+Thin progress bar showing XP toward next unlock
+
+---
+
+# FOCUS MODE SCREEN
+
+/app/(main)/focus/[taskId].tsx
+
+Shows:
+- Task title (large)
+- Elapsed timer (counts up)
+- Current step (pulled from AI or manually set)
+- Character message (short, motivating, in character voice)
+- Buttons: Done step | I'm stuck | Make smaller | Pause | Finish
+
+When "I'm stuck" is pressed:
+- Send stuck event to chat
+- AI responds with resistance_options UI block
+- Show inline in focus screen
+
+When "Finish" is pressed:
+- Mark task as completed
+- Award XP (call POST /xp/award)
+- Show SessionSummaryCard
+- Return to Today screen
+
+---
+
+# XP SYSTEM
+
+XP is awarded on these events:
+- task_completed → +20 XP
+- focus_session_completed (>10 min) → +15 XP
+- return_after_distraction → +10 XP
+- daily_streak → +25 XP
+
+On each XP award:
+1. Update users.xp in database
+2. Insert into xp_events table
+3. Check if new XP total crosses any unlock threshold
+4. If yes: mark character as unlocked (store unlocked_characters array on user or join table)
+5. Return { newXP, unlockedCharacter } in response so client can show unlock animation
+
+---
+
+# SCHEDULING SYSTEM
+
+When user delays a task:
+
+POST /schedule/delay
+Body: { taskId, delay: "10min" | "30min" | "later_today" | "tomorrow" }
+
+1. Calculate scheduled_for timestamp
+2. Update task.scheduled_for and task.status = "scheduled"
+3. Create a Bull delayed job
+4. When job fires: send push notification in character voice
+   Example (Entropy Fox): "Hey. That thing you were going to do? Still there. Waiting. Your call."
+
+If task is missed (scheduled_for passed, status still "scheduled"):
+- Bull job fires a second notification
+- Message offers: reschedule | make it smaller | skip it
+
+---
+
+# SESSION SYSTEM
+
+Sessions track a single focused work period.
+
+Start session: POST /sessions → returns session_id
+During session: all chat messages tagged with session_id
+End session: triggered by inactivity (Bull job, 10 min no messages) or explicit end
+On end:
+1. Call generateSessionSummary
+2. Store summary in sessions.summary
+3. Display SessionSummaryCard in chat
+
+Do NOT store full chat history. Store only the session summary.
+Use Redis to cache the last 20 messages per session (keyed by session_id).
+Evict when session ends.
+
+---
+
+# BEHAVIOR STATES
+
+Detect and log these states via behavior_log table:
+
+- idle: no messages for >5 minutes
+- resistance: user says they can't start, keeps delaying
+- active: user is sending messages, tasks in progress
+- distraction: user opened app mid-task but hasn't responded
+- return: user comes back after idle/distraction
+- completion: task marked completed
+- overwhelm: user mentions too many tasks, feeling stuck
+
+Map each state to character response strategy:
+- idle → gentle nudge in character voice
+- resistance → offer resistance_options block
+- active → affirm and continue
+- distraction → acknowledge return without guilt
+- return → celebrate return, re-orient to task
+- completion → brief celebration, ask about next task
+- overwhelm → acknowledge, offer to pick ONE task together
+
+---
+
+# DESIGN TOKENS
+
+Use these in the frontend:
+
+Background: #0D0D0F (primary), #141416 (secondary), #1C1C1F (card)
+Text: #F0EFE8 (primary), #9C9A92 (secondary), #5A5955 (muted)
+Border: rgba(255,255,255,0.08) (default), rgba(255,255,255,0.15) (hover)
+
+Character accent colors (use for theming when character is active):
+- Entropy Fox: #E8593C (coral)
+- Signal Ghost: #378ADD (blue)
+- Void Otter: #1D9E75 (teal)
+- Friction Goblin: #888780 (gray)
+- Threshold Hare: #EF9F27 (amber)
+- Gravity Snail: #5DCAA5 (light teal)
+- Paradox Moth: #AFA9EC (light purple)
+- Momentum Crow: #7F77DD (purple)
+- Surge Beetle: #D85A30 (dark coral)
+- Drift Whale: #85B7EB (light blue)
+- Cascade Lynx: #97C459 (green)
+- Static Rook: #639922 (dark green)
+- Flicker Imp: #F0997B (peach)
+- Latent Bear: #B5D4F4 (sky)
+- Resonance Hound: #D4537E (pink)
+- Inertia Slug: #B4B2A9 (warm gray)
+- Pressure Kite: #FAC775 (yellow)
+- Decoy Cloud: #5DCAA5 (mint)
+- Null Fox: #444441 (dark gray)
+- Echo Mole: #ED93B1 (light pink)
+
+Font sizes: 28px (hero), 20px (heading), 16px (body), 13px (caption)
+Border radius: 8px (component), 14px (card), 24px (pill)
+Touch targets: minimum 48px height on all interactive elements
+
+---
+
+# ENVIRONMENT VARIABLES NEEDED
+
+Backend (.env):
+DATABASE_URL=
+REDIS_URL=
+ANTHROPIC_API_KEY=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+JWT_SECRET=
+FIREBASE_PROJECT_ID=
+FIREBASE_PRIVATE_KEY=
+FIREBASE_CLIENT_EMAIL=
+
+Mobile (.env):
+EXPO_PUBLIC_API_URL=
+EXPO_PUBLIC_GOOGLE_CLIENT_ID=
+
+---
+
+# BUILD ORDER
+
+Build in this exact sequence:
+
+1. Monorepo scaffold — folder structure, package.json files, tsconfig, shared types package
+2. Database — Drizzle schema, migrations, seed characters
+3. Auth — Google OAuth backend route, JWT middleware, login screen
+4. Onboarding — 5 screens, store to DB on completion
+5. Character system — seed data, XP logic, character selection screen with locked/unlocked states
+6. Chat backend — AI service, context builder, SSE streaming endpoint, UI block parsing
+7. Chat frontend — ChatMessage renderer, UI block components, input bar
+8. Task system — extract endpoint, CRUD routes, TaskCard component, Today screen
+9. Focus mode — timer screen, FocusControls, stuck flow, XP award on completion
+10. Scheduling — delay endpoint, Bull jobs, push notifications
+11. Sessions — session lifecycle, Redis cache, summary generation, SessionSummaryCard
+12. Behavior logging — state detection, behavior_log writes, state-mapped responses
+
+---
+
+# IMPORTANT CONSTRAINTS
+
+- Never call Anthropic API from the frontend. Always proxy through backend.
+- Never store full chat history. Use session summaries + last 6 messages only.
+- Every AI response must include at least one UI_BLOCK.
+- All touch targets must be minimum 48px.
+- Completed tasks must remain visible on Today screen (do not delete from view).
+- Character unlock must be checked on every XP award.
+- Push notifications must be written in the active character's voice.
+- JWT must be stored in Expo SecureStore, never AsyncStorage.
+- All API routes must be authenticated except /auth/google.
+- Use Zod for all request/response validation on backend.
+
+Start with step 1: monorepo scaffold. Ask me for any missing values (app name, etc.) before proceeding.
