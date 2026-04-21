@@ -28,6 +28,12 @@ node_modules
 !.vscode/extensions.json
 
 # misc
+/.codex
+/.env
+/.env.*
+!/.env.example
+/.pnpm-cache/
+/.pnpm-store/
 /.sass-cache
 /connect.lock
 /coverage
@@ -47,3 +53,4 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+node_modules
