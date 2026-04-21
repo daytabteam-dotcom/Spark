@@ -81,10 +81,36 @@ export default function Onboarding() {
     }));
   };
 
+  const toggleAnswer = (question: OnboardingQuestion, selectedOption: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setAnswers((prev) => {
+      const current = prev[question.id]?.selectedOptions ?? [];
+      const selectedOptions = current.includes(selectedOption)
+        ? current.filter((option) => option !== selectedOption)
+        : [...current, selectedOption];
+
+      return {
+        ...prev,
+        [question.id]: {
+          selectedOptions,
+          customAnswer:
+            selectedOptions.includes("Other") ? prev[question.id]?.customAnswer ?? "" : undefined,
+        },
+      };
+    });
+  };
+
   const updateCustomAnswer = (question: OnboardingQuestion, customAnswer: string) => {
     setAnswers((prev) => ({
       ...prev,
-      [question.id]: { selectedOption: "Other", customAnswer },
+      [question.id]: question.multiSelect
+        ? {
+            selectedOptions: Array.from(
+              new Set([...(prev[question.id]?.selectedOptions ?? []), "Other"]),
+            ),
+            customAnswer,
+          }
+        : { selectedOption: "Other", customAnswer },
     }));
   };
 
@@ -94,6 +120,11 @@ export default function Onboarding() {
     if (isOpenResponseStep) return true;
     if (!currentQuestion) return false;
     const answer = answers[currentQuestion.id];
+    if (currentQuestion.multiSelect) {
+      if (!answer?.selectedOptions?.length) return false;
+      if (answer.selectedOptions.includes("Other")) return Boolean(answer.customAnswer?.trim());
+      return true;
+    }
     if (!answer?.selectedOption) return false;
     if (answer.selectedOption === "Other") return Boolean(answer.customAnswer?.trim());
     return true;
@@ -231,6 +262,7 @@ export default function Onboarding() {
             question={currentQuestion}
             answer={answers[currentQuestion.id]}
             onSelect={selectAnswer}
+            onToggle={toggleAnswer}
             onCustomAnswer={updateCustomAnswer}
           />
         )}
@@ -281,28 +313,39 @@ function QuestionStep({
   question,
   answer,
   onSelect,
+  onToggle,
   onCustomAnswer,
 }: {
   question: OnboardingQuestion;
   answer?: OnboardingAnswer;
   onSelect: (question: OnboardingQuestion, selectedOption: string) => void;
+  onToggle: (question: OnboardingQuestion, selectedOption: string) => void;
   onCustomAnswer: (question: OnboardingQuestion, customAnswer: string) => void;
 }) {
   const colors = useColors();
+  const otherSelected = question.multiSelect
+    ? answer?.selectedOptions?.includes("Other")
+    : answer?.selectedOption === "Other";
   return (
     <View style={styles.section}>
       <Text style={[styles.kicker, { color: colors.primary }]}>How work feels</Text>
       <Text style={[styles.heading, { color: colors.foreground }]}>{question.title}</Text>
       <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-        Choose the closest fit. Your own words are welcome too.
+        {question.multiSelect
+          ? "Choose any that fit. Your own words are welcome too."
+          : "Choose the closest fit. Your own words are welcome too."}
       </Text>
       <View style={styles.optionStack}>
         {question.options.map((option) => {
-          const active = answer?.selectedOption === option;
+          const active = question.multiSelect
+            ? Boolean(answer?.selectedOptions?.includes(option))
+            : answer?.selectedOption === option;
           return (
             <Pressable
               key={option}
-              onPress={() => onSelect(question, option)}
+              onPress={() =>
+                question.multiSelect ? onToggle(question, option) : onSelect(question, option)
+              }
               style={[
                 styles.optionCard,
                 {
@@ -315,7 +358,10 @@ function QuestionStep({
               <View
                 style={[
                   styles.radio,
-                  { borderColor: active ? colors.primary : colors.border },
+                  {
+                    borderColor: active ? colors.primary : colors.border,
+                    borderRadius: question.multiSelect ? 6 : 999,
+                  },
                 ]}
               >
                 {active && <View style={[styles.radioDot, { backgroundColor: colors.primary }]} />}
@@ -324,9 +370,9 @@ function QuestionStep({
           );
         })}
       </View>
-      {answer?.selectedOption === "Other" && (
+      {otherSelected && (
         <TextInput
-          value={answer.customAnswer ?? ""}
+          value={answer?.customAnswer ?? ""}
           onChangeText={(text) => onCustomAnswer(question, text)}
           placeholder={question.otherPrompt}
           placeholderTextColor={colors.mutedForeground}

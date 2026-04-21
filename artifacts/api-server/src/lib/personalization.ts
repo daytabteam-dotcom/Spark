@@ -1,8 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { behaviorLogTable, db, tasksTable, usersTable, type User } from "@workspace/db";
 
 type OnboardingAnswer = {
   selectedOption?: string;
+  selectedOptions?: string[];
   customAnswer?: string;
 };
 
@@ -54,12 +55,32 @@ export type BehaviorMetrics = {
 
 const nowIso = () => new Date().toISOString();
 
+let schemaReady: Promise<void> | null = null;
+
+export function ensurePersonalizationSchema(): Promise<void> {
+  schemaReady ??= (async () => {
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "onboarding_answers" jsonb NOT NULL DEFAULT '{}'::jsonb`);
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "behavior_profile" jsonb NOT NULL DEFAULT '{}'::jsonb`);
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "behavior_metrics" jsonb NOT NULL DEFAULT '{}'::jsonb`);
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "onboarding_completed_at" timestamp with time zone`);
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "profile_updated_at" timestamp with time zone`);
+  })();
+  return schemaReady;
+}
+
 function option(answers: OnboardingAnswers, key: string): string {
   const value = answers[key];
   if (!value) return "";
   if (typeof value === "string") return value;
   if (typeof value !== "object") return "";
   const answer = value as OnboardingAnswer;
+  if (Array.isArray(answer.selectedOptions)) {
+    const selected = answer.selectedOptions.filter((item) => item !== "Other");
+    if (answer.selectedOptions.includes("Other") && answer.customAnswer) {
+      selected.push(answer.customAnswer);
+    }
+    return selected.join(", ");
+  }
   return answer.selectedOption === "Other"
     ? (answer.customAnswer ?? answer.selectedOption ?? "")
     : (answer.selectedOption ?? "");
@@ -260,6 +281,7 @@ export function refineProfileWithBehavior(
 }
 
 export async function refreshUserBehaviorProfile(userId: string): Promise<User | null> {
+  await ensurePersonalizationSchema();
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
   if (!user) return null;
 
@@ -284,6 +306,7 @@ export async function logBehaviorEvent(input: {
   taskId?: string | null;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
+  await ensurePersonalizationSchema();
   await db.insert(behaviorLogTable).values({
     userId: input.userId,
     eventType: input.eventType,
@@ -337,6 +360,7 @@ Personalize extracted tasks for this user:
 }
 
 export async function findUserById(userId: string): Promise<User | null> {
+  await ensurePersonalizationSchema();
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
   return user ?? null;
 }

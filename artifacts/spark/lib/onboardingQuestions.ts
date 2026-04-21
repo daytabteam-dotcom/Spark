@@ -9,10 +9,12 @@ export type OnboardingQuestion = {
   title: string;
   options: string[];
   otherPrompt: string;
+  multiSelect?: boolean;
 };
 
 export type OnboardingAnswer = {
-  selectedOption: string;
+  selectedOption?: string;
+  selectedOptions?: string[];
   customAnswer?: string;
 };
 
@@ -31,6 +33,7 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
       "Other",
     ],
     otherPrompt: "Tell us what usually happens",
+    multiSelect: true,
   },
   {
     id: "energy_pattern",

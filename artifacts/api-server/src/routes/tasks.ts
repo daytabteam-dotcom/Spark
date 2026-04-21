@@ -14,6 +14,7 @@ import {
   logTaskSwitchIfNeeded,
   taskGenerationPersonalizationPrompt,
 } from "../lib/personalization";
+import { canUseDevFallback } from "../lib/devFallback";
 
 const router: IRouter = Router();
 
@@ -27,7 +28,11 @@ router.get("/tasks", async (req, res) => {
     .select()
     .from(tasksTable)
     .where(and(...conds))
-    .orderBy(desc(tasksTable.createdAt));
+    .orderBy(desc(tasksTable.createdAt))
+    .catch((error) => {
+      if (!canUseDevFallback(error)) throw error;
+      return [];
+    });
   return res.json(rows);
 });
 
