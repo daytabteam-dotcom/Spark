@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, usersTable } from "@workspace/db";
 import { CreateUserBody, UpdateUserBody } from "@workspace/api-zod";
+import { createInitialBehaviorProfile } from "../lib/personalization";
 
 const router: IRouter = Router();
 
@@ -16,6 +17,10 @@ router.post("/users", async (req, res) => {
       name: parsed.data.name,
       selectedCharacterId: parsed.data.selectedCharacterId ?? "entropy-fox",
       difficultyTags: parsed.data.difficultyTags ?? [],
+      onboardingAnswers: parsed.data.onboardingAnswers ?? {},
+      behaviorProfile: createInitialBehaviorProfile(parsed.data.onboardingAnswers ?? {}),
+      onboardingCompletedAt: new Date(),
+      profileUpdatedAt: new Date(),
     })
     .returning();
   return res.status(201).json(user);

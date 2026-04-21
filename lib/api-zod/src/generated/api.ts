@@ -21,6 +21,7 @@ export const CreateUserBody = zod.object({
   name: zod.string(),
   selectedCharacterId: zod.string().optional(),
   difficultyTags: zod.array(zod.string()).optional(),
+  onboardingAnswers: zod.record(zod.string(), zod.unknown()).optional(),
 });
 
 export const GetUserParams = zod.object({
@@ -32,6 +33,11 @@ export const GetUserResponse = zod.object({
   name: zod.string(),
   selectedCharacterId: zod.string(),
   difficultyTags: zod.array(zod.string()),
+  onboardingAnswers: zod.record(zod.string(), zod.unknown()),
+  behaviorProfile: zod.record(zod.string(), zod.unknown()),
+  behaviorMetrics: zod.record(zod.string(), zod.unknown()),
+  onboardingCompletedAt: zod.coerce.date().nullish(),
+  profileUpdatedAt: zod.coerce.date().nullish(),
   xp: zod.number(),
   createdAt: zod.coerce.date(),
 });
@@ -44,6 +50,9 @@ export const UpdateUserBody = zod.object({
   name: zod.string().optional(),
   selectedCharacterId: zod.string().optional(),
   difficultyTags: zod.array(zod.string()).optional(),
+  onboardingAnswers: zod.record(zod.string(), zod.unknown()).optional(),
+  behaviorProfile: zod.record(zod.string(), zod.unknown()).optional(),
+  behaviorMetrics: zod.record(zod.string(), zod.unknown()).optional(),
 });
 
 export const UpdateUserResponse = zod.object({
@@ -51,6 +60,11 @@ export const UpdateUserResponse = zod.object({
   name: zod.string(),
   selectedCharacterId: zod.string(),
   difficultyTags: zod.array(zod.string()),
+  onboardingAnswers: zod.record(zod.string(), zod.unknown()),
+  behaviorProfile: zod.record(zod.string(), zod.unknown()),
+  behaviorMetrics: zod.record(zod.string(), zod.unknown()),
+  onboardingCompletedAt: zod.coerce.date().nullish(),
+  profileUpdatedAt: zod.coerce.date().nullish(),
   xp: zod.number(),
   createdAt: zod.coerce.date(),
 });
@@ -123,6 +137,7 @@ export const DeleteTaskParams = zod.object({
  */
 export const ExtractTasksBody = zod.object({
   rawText: zod.string(),
+  userId: zod.string().optional(),
 });
 
 export const ExtractTasksResponse = zod.object({

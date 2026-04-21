@@ -33,6 +33,8 @@ import type {
   HealthStatus,
   ListCharactersParams,
   ListTasksParams,
+  LogBehaviorEventBody,
+  LogBehaviorEventResponse,
   Session,
   Task,
   UpdateSessionBody,
@@ -1354,3 +1356,83 @@ export function useListCharacters<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+export const getLogBehaviorEventUrl = () => {
+  return `/api/behavior/events`;
+};
+
+export const logBehaviorEvent = async (
+  logBehaviorEventBody: LogBehaviorEventBody,
+  options?: RequestInit,
+): Promise<LogBehaviorEventResponse> => {
+  return customFetch<LogBehaviorEventResponse>(getLogBehaviorEventUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(logBehaviorEventBody),
+  });
+};
+
+export const getLogBehaviorEventMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof logBehaviorEvent>>,
+    TError,
+    { data: BodyType<LogBehaviorEventBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof logBehaviorEvent>>,
+  TError,
+  { data: BodyType<LogBehaviorEventBody> },
+  TContext
+> => {
+  const mutationKey = ["logBehaviorEvent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof logBehaviorEvent>>,
+    { data: BodyType<LogBehaviorEventBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return logBehaviorEvent(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LogBehaviorEventMutationResult = NonNullable<
+  Awaited<ReturnType<typeof logBehaviorEvent>>
+>;
+export type LogBehaviorEventMutationBody = BodyType<LogBehaviorEventBody>;
+export type LogBehaviorEventMutationError = ErrorType<unknown>;
+
+export const useLogBehaviorEvent = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof logBehaviorEvent>>,
+    TError,
+    { data: BodyType<LogBehaviorEventBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof logBehaviorEvent>>,
+  TError,
+  { data: BodyType<LogBehaviorEventBody> },
+  TContext
+> => {
+  return useMutation(getLogBehaviorEventMutationOptions(options));
+};

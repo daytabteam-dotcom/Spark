@@ -25,6 +25,7 @@ import { useColors } from "@/hooks/useColors";
 import { useSparkUser } from "@/hooks/useSparkUser";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { getFocusStartLabel } from "@/lib/personalization";
 
 function fmt(sec: number) {
   const m = Math.floor(sec / 60);
@@ -147,6 +148,7 @@ export default function FocusScreen() {
   }
 
   const remaining = Math.max(0, initial - elapsed);
+  const startLabel = getFocusStartLabel(user);
 
   return (
     <ScrollView
@@ -170,7 +172,7 @@ export default function FocusScreen() {
       )}
 
       {!running ? (
-        <Button label="Start focus" onPress={start} fullWidth style={{ marginTop: 24 }} />
+        <Button label={startLabel} onPress={start} fullWidth style={{ marginTop: 24 }} />
       ) : (
         <View style={{ flexDirection: "row", gap: 8, marginTop: 24 }}>
           <Button

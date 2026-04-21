@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq } from "drizzle-orm";
-import { db, chatMessagesTable, tasksTable } from "@workspace/db";
-import { anthropic } from "@workspace/integrations-anthropic-ai";
+import { db, chatMessagesTable, tasksTable, usersTable } from "@workspace/db";
 import { SendChatMessageBody } from "@workspace/api-zod";
 import { getCharacter } from "../lib/characters";
+import { generateText } from "../lib/openai";
+import { assistantPersonalizationPrompt, logBehaviorEvent } from "../lib/personalization";
 
 const router: IRouter = Router();
 
@@ -15,6 +16,7 @@ router.post("/chat", async (req, res) => {
   const { userId, characterId, message, sessionId, activeTaskId } = parsed.data;
   const character = getCharacter(characterId);
   if (!character) return res.status(400).json({ error: "unknown_character" });
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
 
   let activeTaskContext = "";
   if (activeTaskId) {
@@ -47,6 +49,8 @@ router.post("/chat", async (req, res) => {
 
   const systemPrompt = `${character.personalityPrompt}${activeTaskContext}
 
+${user ? assistantPersonalizationPrompt(user) : ""}
+
 You may optionally include UI elements by emitting a final code block with this exact format:
 \`\`\`uiblocks
 {"blocks":[{"type":"options","options":["..."]},{"type":"checklist","items":["..."]}]}
@@ -55,16 +59,13 @@ Valid block types: "options" (quick reply buttons), "checklist" (visible checkli
 Keep prose concise (1-4 short sentences). Only include uiblocks when genuinely helpful.`;
 
   try {
-    const completion = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [...history, { role: "user", content: message }],
+    const fullText = await generateText({
+      instructions: systemPrompt,
+      maxOutputTokens: 1024,
+      input: [...history, { role: "user", content: message }],
     });
-    const block = completion.content[0];
-    const fullText = block && block.type === "text" ? block.text : "...";
 
-    let prose = fullText;
+    let prose = fullText || "...";
     let uiBlocks: unknown[] = [];
     const fenceMatch = fullText.match(/```uiblocks\s*([\s\S]*?)```/);
     if (fenceMatch) {
@@ -84,6 +85,12 @@ Keep prose concise (1-4 short sentences). Only include uiblocks when genuinely h
       role: "assistant",
       content: prose,
       uiBlocks,
+    });
+    await logBehaviorEvent({
+      userId,
+      eventType: "chat_interaction",
+      taskId: activeTaskId ?? null,
+      metadata: { characterId, hasUiBlocks: uiBlocks.length > 0 },
     });
 
     return res.json({ message: prose, uiBlocks });

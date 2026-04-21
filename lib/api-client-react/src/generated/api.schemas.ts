@@ -14,6 +14,11 @@ export interface User {
   name: string;
   selectedCharacterId: string;
   difficultyTags: string[];
+  onboardingAnswers: Record<string, unknown>;
+  behaviorProfile: Record<string, unknown>;
+  behaviorMetrics: Record<string, unknown>;
+  onboardingCompletedAt?: string | null;
+  profileUpdatedAt?: string | null;
   xp: number;
   createdAt: string;
 }
@@ -22,12 +27,16 @@ export interface CreateUserBody {
   name: string;
   selectedCharacterId?: string;
   difficultyTags?: string[];
+  onboardingAnswers?: Record<string, unknown>;
 }
 
 export interface UpdateUserBody {
   name?: string;
   selectedCharacterId?: string;
   difficultyTags?: string[];
+  onboardingAnswers?: Record<string, unknown>;
+  behaviorProfile?: Record<string, unknown>;
+  behaviorMetrics?: Record<string, unknown>;
 }
 
 export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
@@ -113,6 +122,7 @@ export interface UpdateTaskBody {
 
 export interface ExtractTasksBody {
   rawText: string;
+  userId?: string;
 }
 
 export type ExtractedTaskResistanceLevel =
@@ -244,3 +254,16 @@ export type GetChatHistoryParams = {
 export type ListCharactersParams = {
   userId?: string;
 };
+
+export interface LogBehaviorEventBody {
+  userId: string;
+  eventType: string;
+  taskId?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface LogBehaviorEventResponse {
+  ok: boolean;
+  behaviorProfile?: Record<string, unknown> | null;
+  behaviorMetrics?: Record<string, unknown> | null;
+}

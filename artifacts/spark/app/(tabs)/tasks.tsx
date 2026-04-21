@@ -18,6 +18,7 @@ import {
   useUpdateTask,
   useDeleteTask,
   useAwardXp,
+  useLogBehaviorEvent,
   getListTasksQueryKey,
   getGetUserQueryKey,
 } from "@workspace/api-client-react";
@@ -26,13 +27,15 @@ import { useColors } from "@/hooks/useColors";
 import { useSparkUser } from "@/hooks/useSparkUser";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { getAdaptiveTaskCopy } from "@/lib/personalization";
 
 export default function TasksScreen() {
   const colors = useColors();
-  const { userId } = useSparkUser();
+  const { userId, user } = useSparkUser();
   const qc = useQueryClient();
   const [dump, setDump] = useState("");
   const [extracted, setExtracted] = useState<ExtractedTask[] | null>(null);
+  const taskCopy = getAdaptiveTaskCopy(user);
   const tasks = useListTasks(
     { userId: userId ?? "" },
     {
@@ -47,6 +50,7 @@ export default function TasksScreen() {
   const updateMut = useUpdateTask();
   const deleteMut = useDeleteTask();
   const awardXp = useAwardXp();
+  const behaviorMut = useLogBehaviorEvent();
 
   const refresh = () => {
     if (userId) {
@@ -56,10 +60,17 @@ export default function TasksScreen() {
   };
 
   const onExtract = async () => {
-    if (!dump.trim()) return;
+    if (!dump.trim() || !userId) return;
     try {
-      const res = await extractMut.mutateAsync({ data: { rawText: dump } });
+      const res = await extractMut.mutateAsync({ data: { rawText: dump, userId } });
       setExtracted(res.tasks);
+      behaviorMut.mutate({
+        data: {
+          userId,
+          eventType: "tasks_extracted",
+          metadata: { count: res.tasks.length },
+        },
+      });
     } catch (e) {
       Alert.alert("Extraction failed", String(e));
     }
@@ -91,6 +102,11 @@ export default function TasksScreen() {
   };
 
   const onDelete = async (t: Task) => {
+    if (userId) {
+      behaviorMut.mutate({
+        data: { userId, eventType: "task_abandoned", taskId: t.id, metadata: { source: "delete" } },
+      });
+    }
     await deleteMut.mutateAsync({ taskId: t.id });
     refresh();
   };
@@ -107,7 +123,7 @@ export default function TasksScreen() {
       <Card>
         <Text style={[styles.label, { color: colors.foreground }]}>Brain dump</Text>
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-          Type everything in your head. We{"'"}ll turn it into clean tasks.
+          {taskCopy.placeholder}
         </Text>
         <TextInput
           value={dump}
@@ -126,7 +142,7 @@ export default function TasksScreen() {
           ]}
         />
         <Button
-          label="Extract tasks"
+          label={taskCopy.extractLabel}
           onPress={onExtract}
           loading={extractMut.isPending}
           disabled={!dump.trim()}
@@ -175,7 +191,7 @@ export default function TasksScreen() {
       ) : open.length === 0 ? (
         <Card>
           <Text style={{ color: colors.mutedForeground, textAlign: "center" }}>
-            All caught up.
+            {taskCopy.emptyState}
           </Text>
         </Card>
       ) : (

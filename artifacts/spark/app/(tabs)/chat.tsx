@@ -22,6 +22,7 @@ import {
 import { useColors } from "@/hooks/useColors";
 import { useSparkUser } from "@/hooks/useSparkUser";
 import { CharacterAvatar } from "@/components/ui/CharacterAvatar";
+import { getChatPlaceholder } from "@/lib/personalization";
 
 export default function ChatScreen() {
   const colors = useColors();
@@ -30,6 +31,7 @@ export default function ChatScreen() {
   const [input, setInput] = useState("");
   const scrollRef = useRef<ScrollView>(null);
   const characterId = user?.selectedCharacterId ?? "entropy-fox";
+  const chatPlaceholder = getChatPlaceholder(user);
 
   const characters = useListCharacters(
     { userId: userId ?? undefined },
@@ -182,7 +184,7 @@ export default function ChatScreen() {
         <TextInput
           value={input}
           onChangeText={setInput}
-          placeholder="Talk to your companion..."
+          placeholder={chatPlaceholder}
           placeholderTextColor={colors.mutedForeground}
           multiline
           style={[
