@@ -24,12 +24,6 @@ type OpenAIResponse = {
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = "gpt-5-mini";
 
-const apiKey = process.env.OPENAI_API_KEY;
-
-if (!apiKey) {
-  throw new Error("OPENAI_API_KEY must be set.");
-}
-
 export async function generateText({
   instructions,
   input,
@@ -39,7 +33,7 @@ export async function generateText({
   input: OpenAIInputMessage[];
   maxOutputTokens?: number;
 }) {
-  const resolvedApiKey = apiKey;
+  const resolvedApiKey = process.env.OPENAI_API_KEY;
   if (!resolvedApiKey) {
     throw new Error("OPENAI_API_KEY must be set.");
   }
